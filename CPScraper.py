@@ -46,26 +46,6 @@ pid = driver.service.process.pid
 # except ProcessLookupError as ex:
 #     pass
 
-# Example usage
-driver.get('https://www.coupang.com/')
-# print(driver.title)
-
-# Locate the textbox by its ID
-searchTextbox = driver.find_element("id", "headerSearchKeyword")
-
-# Input text into the textbox
-searchTextbox.send_keys("A4용지")
-
-driver.implicitly_wait(5)  # Wait for up to 5 seconds for elements to appear
-
-# Locate the button by its ID
-button = driver.find_element("id", "headerSearchBtn")
-
-# Click the button
-button.click()
-
-# Clean up
-# driver.quit()
 '''
 
 
@@ -83,20 +63,29 @@ import time
 import csv
 
 # set variables (input vars)
-sWebSiteURL = 'https://www.coupang.com/'
+# sWebSiteURL = 'https://www.coupang.com/'
+sWebSiteURL = 'https://www.coupang.com/np/search?q=a4%EC%9A%A9%EC%A7%80&channel=recent'
 sKeywordToFind = 'A4용지'
 sFileToWrite = r'C:\CoupangScraper\CSVTest.csv'
 # set variables (inner vars)
 # Define the total time to run and the interval between scrolls
-total_time = 5  # Total time to run in seconds
-interval = 0.25  # Interval between each scroll and print operation in seconds
+nTotalTime = 5  # Total time to run in seconds
+nInterval = 0.25  # Interval between each scroll and print operation in seconds
 # Calculate the number of iterations
-iterations = int(total_time / interval)
+nIterations = int(nTotalTime / nInterval)
 
+# log message function (Will be changed to display on the program later)
+def log_message(message):
+    print(message)  
+
+# adding options -> disable popup
 options = uc.ChromeOptions()
+options.add_argument("--start-maximized")
+options.add_argument('--disable-popup-blocking')
+options.add_argument('--remote-debugging-port=9222')
 
 # Create a WebDriver Object
-driver = uc.Chrome( options = options,enable_cdp_events=True,incognito=True)
+driver = uc.Chrome(options = options,enable_cdp_events=True,incognito=True)
 
 # selenium_stealth setting
 stealth(driver,
@@ -107,17 +96,100 @@ stealth(driver,
         fix_hairline=True,
         )
 
-# disable popup
-options.add_argument('--disable-popup-blocking')
-options.add_argument('--remote-debugging-port=9222')
-
 # visit website
 driver.get(sWebSiteURL)
-# 대기 시간 설정 =&gt; 대기 시간을 설정하여, html이 렌더링 되는 시간을 벌어줍니다.
+# wait for HTML to render
 driver.implicitly_wait(2)
+log_message(f'웹사이트 접속 성공: {sWebSiteURL}')
+
+def search_paging():
+    try:
+        while True:
+            # Find all page number links
+            page_buttons = WebDriverWait(driver, 10).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, '.search-pagination a'))
+            )
+            
+            log_message('페이지 버튼들 찾기 성공')
+
+            # Click on each page number link
+            for button in page_buttons:
+                try:
+                    # Re-find the button to avoid stale element reference
+                    button = WebDriverWait(driver, 10).until(
+                        EC.element_to_be_clickable((By.XPATH, f'//a[text()="{button.text}"]'))
+                    )
+                    
+                    # Debug: Print detailed information of each page button
+                    print(f"Found {len(page_buttons)} page buttons.")
+                    for index, button in enumerate(page_buttons):
+                        try:
+                            # Fetch and print button details
+                            button_text = button.text
+                            button_class = button.get_attribute('class')
+                            button_href = button.get_attribute('href')
+                            print(f"Button {index+1}:")
+                            print(f"  Text: {button_text}")
+                            print(f"  Class: {button_class}")
+                            print(f"  Href: {button_href}")
+                        except Exception as e:
+                            print(f"Error fetching details for button {index+1}: {e}")
+                            
+                        # 11번째 요소가 Next 버튼임.. Text가 다음이면 pass해라 
+                        # Button 10:
+                        # Text: 27
+                        '''
+                        Button 10:
+                        Text: 27
+                        Class: btn-last disabled
+                        Href: None
+                        '''
+                            
+                        log_message('페이징 버튼 클릭 시도')
+                    
+                    # Click the button if it is not the currently selected page
+                    if 'selected' not in button.get_attribute('class'):
+                        button.click()
+                        WebDriverWait(driver, 10).until(
+                            EC.staleness_of(button)
+                        )
+                        driver.implicitly_wait(3)  # Wait for the page to load
+                    else:
+                        print(f"Already on page {button.text}")
+                except Exception as e:
+                    print(f"Error interacting with page button: {e}")
+                    continue
+
+            # Find and click the 'Next' button if available
+            try:
+                next_button = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, '.btn-next'))
+                )
+                if 'disabled' not in next_button.get_attribute('class'):
+                    next_button.click()
+                    WebDriverWait(driver, 10).until(
+                        EC.staleness_of(next_button)  # Wait until the button is no longer present
+                    )
+                    time.sleep(2)  # Wait for the next page to load
+                else:
+                    # If 'Next' button is disabled, we are on the last page
+                    print("Reached the last page.")
+                    break
+            except Exception as e:
+                print(f"Error interacting with 'Next' button: {e}")
+                break
+    finally:
+        # Close the WebDriver
+        driver.quit()
+
+
+search_paging()
+
+
+log_message(f'검색을 진행합니다. 검색 키워드: {sKeywordToFind}')
 
 # Locate the searchtextbox by its ID and set the text to search
-driver.find_element("id", "headerSearchKeyword").send_keys("A4용지")
+driver.find_element("id", "headerSearchKeyword").send_keys(sKeywordToFind)
 driver.implicitly_wait(5)  # Wait for up to 5 seconds for elements to appear
 # Hit the search btn
 driver.find_element("id", "headerSearchBtn").click()
@@ -125,7 +197,7 @@ driver.find_element("id", "headerSearchBtn").click()
 # Set the current window to the original (products list window)
 original_window = driver.current_window_handle
 
-# Locate elements by class name
+# Find images of each products
 prod_images = driver.find_elements(By.CLASS_NAME, 'search-product-wrap-img')
 
 # Check if there are any elements of image found
@@ -133,7 +205,8 @@ if prod_images:
     # Click the first element
     prod_images[1].click()
 else:
-    print("No elements found with the class 'search-product-wrap-img'.")
+    log_message('*오류 발생: 제품 목록에서 이미지를 찾지 못했습니다.*')
+    # 프로그램 종료하기
     
 driver.implicitly_wait(3)
     
@@ -149,12 +222,14 @@ for window in all_windows:
 driver.implicitly_wait(3)
 
 
+log_message('상세 페이지에서 댓글 데이터를 추출합니다.')
+
 # CSV file generate if not exist, or re-write
 with open(sFileToWrite, mode='w', newline='', encoding='utf-8-sig') as file:
     writer = csv.writer(file)
     
     # Loop to scroll and print
-    for _ in range(iterations):
+    for _ in range(nIterations):
         # Scroll to the bottom of the page
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         
@@ -163,16 +238,16 @@ with open(sFileToWrite, mode='w', newline='', encoding='utf-8-sig') as file:
             # 현재 페이지 크기를 가져와서 1페이지만큼 위로 스크롤 (일반적으로 화면 높이 기준)
             scroll_height = driver.execute_script("return window.innerHeight;")  # 현재 페이지 높이 계산
             driver.execute_script(f"window.scrollBy(0, -{scroll_height});")  # 스크롤 위로 이동
-            print(f"Scrolled up by one page (iteration {i+1}).")
+            # print(f"Scrolled up by one page (iteration {i+1}).")
         
         # Wait for the page to load new content
-        time.sleep(interval)  # Sleep for the interval time
+        time.sleep(nInterval)  # Sleep for the interval time
         
         # Find elements
         elements = driver.find_elements(By.CLASS_NAME, 'sdp-review__article__list.js_reviewArticleReviewList')
         
         # Debug: Print the number of elements found
-        print(f"Number of elements found: {len(elements)}")
+        print(f"Number of review elements found: {len(elements)}")
         
         # If a review element is found
         if len(elements) > 0:
@@ -181,11 +256,13 @@ with open(sFileToWrite, mode='w', newline='', encoding='utf-8-sig') as file:
                 review_text = element.text  # parse the whole text of a review
                 writer.writerow([index, review_text])  # CSV 파일에 쓰기 (A열: index, B열: review_text)
                 # print(f"Index {index}: {element.text}")
+            log_message(f'[작업 완료]추출한 데이터 파일 쓰기 성공: {sFileToWrite}')
             break
-        # If a review element is not found
+        # If review element is not found
         else:
-            print("No elements found.")
+            print("No review element's been found.")
         
+
 
 print("전체 완료")
 
@@ -194,7 +271,6 @@ print("ㅎㅇ test중")
 
 
 # 추출한 자료 엑셀 csv 파일 저장
-
 
 # '''TEST 구간'''
 # # 날짜 관련 작업 (금일 날짜 받아오기 등)
