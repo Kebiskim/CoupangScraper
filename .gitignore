@@ -1,0 +1,32 @@
+# Python 가상 환경
+venv/
+
+# Python 바이트코드 파일
+*.pyc
+__pycache__/
+
+# IDE 및 환경 설정 파일
+.vscode/
+.idea/
+
+# Jupyter Notebook 체크포인트
+.ipynb_checkpoints/
+
+# 환경 설정 파일
+.env
+*.env
+
+# 빌드 결과물
+build/
+dist/
+*.egg-info/
+
+# 로그 파일
+*.log
+
+# 시스템 파일
+.DS_Store
+Thumbs.db
+
+# 기타
+*.swp
